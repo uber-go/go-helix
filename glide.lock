@@ -1,0 +1,48 @@
+hash: 66fcadd1753f7ee63c624c0550b46a2867defe89563adc6b2811b947792bce64
+updated: 2017-12-15T15:10:07.964694982-08:00
+imports:
+- name: github.com/davecgh/go-spew
+  version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
+  subpackages:
+  - spew
+- name: github.com/facebookgo/clock
+  version: 600d898af40aa09a7a93ecb9265d87b0504b6f03
+- name: github.com/pkg/errors
+  version: 8842a6e0cc595d1cc9d931f6c875883967280e32
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  subpackages:
+  - difflib
+- name: github.com/samuel/go-zookeeper
+  version: 471cd4e61d7a78ece1791fa5faa0345dc8c7d5a5
+  subpackages:
+  - zk
+- name: github.com/stretchr/testify
+  version: 2aa2c176b9dab406a6970f6a55f513e8a8c8b18f
+  subpackages:
+  - assert
+  - require
+  - suite
+- name: github.com/uber-go/tally
+  version: 6c4631652c6aab57c64f65c2e0aaec2e9aae3a64
+- name: go.uber.org/atomic
+  version: 8474b86a5a6f79c443ce4b2992817ff32cf208b8
+- name: go.uber.org/multierr
+  version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
+- name: go.uber.org/zap
+  version: f85c78b1dd998214c5f2138155b320a4a43fbe36
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
+testImports:
+- name: github.com/golang/lint
+  version: f635bddafc7154957bd70209ee858a4b97e64a9b
+  subpackages:
+  - golint
+- name: golang.org/x/tools
+  version: 64890f4e2b733655fee5077a5435a8812404c3a3
+  subpackages:
+  - go/gcexportdata

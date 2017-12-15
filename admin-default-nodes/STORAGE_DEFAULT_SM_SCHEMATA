@@ -1,0 +1,36 @@
+{
+  "id" : "STORAGE_DEFAULT_SM_SCHEMATA",
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.next" : {
+      "DROPPED" : "DROPPED",
+      "OFFLINE" : "OFFLINE"
+    },
+    "MASTER.meta" : {
+      "count" : "N"
+    },
+    "MASTER.next" : {
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "DROPPED" : "DROPPED",
+      "MASTER" : "MASTER"
+    }
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "MASTER", "OFFLINE", "DROPPED", "ERROR" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "MASTER-OFFLINE", "OFFLINE-MASTER" ]
+  },
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  }
+}

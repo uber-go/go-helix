@@ -1,0 +1,39 @@
+{
+  "id" : "LeaderStandby",
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "LEADER.meta" : {
+      "count" : "1"
+    },
+    "LEADER.next" : {
+      "DROPPED" : "STANDBY",
+      "STANDBY" : "STANDBY",
+      "OFFLINE" : "STANDBY"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "DROPPED" : "DROPPED",
+      "STANDBY" : "STANDBY",
+      "LEADER" : "STANDBY"
+    },
+    "STANDBY.meta" : {
+      "count" : "R"
+    },
+    "STANDBY.next" : {
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE",
+      "LEADER" : "LEADER"
+    }
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "LEADER", "STANDBY", "OFFLINE", "DROPPED" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "LEADER-STANDBY", "STANDBY-LEADER", "OFFLINE-STANDBY", "STANDBY-OFFLINE", "OFFLINE-DROPPED" ]
+  },
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  }
+}

@@ -1,0 +1,11 @@
+# Ignore vendor created by glide
+vendor/
+
+# Ignore the dev zookeeper data
+zookeeper-data/
+
+# Ignore log files
+*.log
+
+# IDE artifacts
+.idea/*

@@ -1,0 +1,17 @@
+package: github.com/uber-go/go-helix
+license: MIT
+import:
+- package: github.com/samuel/go-zookeeper
+- package: github.com/pkg/errors
+- package: github.com/uber-go/tally
+- package: go.uber.org/zap
+testImport:
+- package: github.com/golang/lint
+  subpackages:
+  - golint
+- package: golang.org/x/tools
+  subpackages:
+  - go/gcexportdata
+- package: github.com/stretchr/testify
+  subpackages:
+  - mock
