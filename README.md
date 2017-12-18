@@ -1,4 +1,4 @@
-# :go-helix: go-helix [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
+# go-helix [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
 
 The Go implementation of [Apache Helix](https://helix.apache.org) (currently the participant part only).
 
@@ -72,7 +72,8 @@ Released under the [MIT License](LICENSE).
 
 [doc-img]: https://godoc.org/github.com/uber-go/go-helix?status.svg
 [doc]: https://godoc.org/github.com/uber-go/go-helix
-[ci-img]: https://travis-ci.org/uber-go/go-helix.svg?branch=master
-[ci]: https://travis-ci.org/uber-go/go-helix
+[//]: # (TODO: update to https://travis-ci.org/uber-go/go-helix after making the repo public)
+[ci-img]: https://travis-ci.com/uber-go/go-helix.svg?token=iecXysxCKpLxFnkjyQYH&branch=master
+[ci]: https://travis-ci.com/uber-go/go-helix
 [cov-img]: https://codecov.io/gh/uber-go/go-helix/branch/master/graph/badge.svg
 [cov]: https://codecov.io/gh/uber-go/go-helix

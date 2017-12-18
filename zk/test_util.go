@@ -45,14 +45,18 @@ var mu = sync.Mutex{}
 type BaseZkTestSuite struct {
 	suite.Suite
 
+	EmbeddedZkPath  string
 	ZkConnectString string
 }
 
 // SetupSuite ensures ZK server is up
 func (s *BaseZkTestSuite) SetupSuite() {
 	s.ZkConnectString = EmbeddedZkServer
-	path := path.Join(os.Getenv("APP_ROOT"), "helix/zk/embedded")
-	err := EnsureZookeeperUp(path)
+
+	if s.EmbeddedZkPath == "" {
+		s.EmbeddedZkPath = path.Join(os.Getenv("APP_ROOT"), "zk/embedded")
+	}
+	err := EnsureZookeeperUp(s.EmbeddedZkPath)
 	s.NoError(err)
 }
 
