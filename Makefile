@@ -12,7 +12,7 @@ SHOULD_LINT := true
 endif
 
 .PHONY: all
-all: lint test cover
+all: lint test
 
 .PHONY: lint
 lint:
@@ -52,3 +52,6 @@ ifdef SHOULD_LINT
 else
 	@echo "Not installing golint, since we don't expect to lint on" $(GO_VERSION)
 endif
+
+# utility to find project root
+export APP_ROOT = $(CURDIR)
