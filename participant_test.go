@@ -22,6 +22,8 @@ package helix
 
 import (
 	"log"
+	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -41,21 +43,23 @@ type ParticipantTestSuite struct {
 }
 
 func TestParticipantTestSuite(t *testing.T) {
-	suite.Run(t, &ParticipantTestSuite{})
+	s := &ParticipantTestSuite{}
+	s.EmbeddedZkPath = "zk/embedded" // TODO (zhijin): remove when moving to github
+	suite.Run(t, s)
 }
 
 func (s *ParticipantTestSuite) TestConnectAndDisconnect() {
-	p1 := s.createParticipantAndConnect()
+	p1, _ := s.createParticipantAndConnect()
 	p1.Disconnect()
 	s.Admin.DropInstance(TestClusterName, p1.instanceName)
 
-	p2 := s.createParticipantAndConnect()
+	p2, _ := s.createParticipantAndConnect()
 	p2.Disconnect()
 	s.Admin.DropInstance(TestClusterName, p2.instanceName)
 }
 
 func (s *ParticipantTestSuite) TestIsClusterSetup() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	setup, err := p.isClusterSetup()
@@ -64,7 +68,7 @@ func (s *ParticipantTestSuite) TestIsClusterSetup() {
 }
 
 func (s *ParticipantTestSuite) TestHandleInvalidMessages() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	msgEmpty := &model.Message{}
@@ -85,7 +89,7 @@ func (s *ParticipantTestSuite) TestHandleInvalidMessages() {
 }
 
 func (s *ParticipantTestSuite) TestHandleValidMessages() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	validMsgs := []*model.Message{
@@ -102,7 +106,7 @@ func (s *ParticipantTestSuite) TestHandleValidMessages() {
 }
 
 func (s *ParticipantTestSuite) TestGetCurrentResourceNames() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	resources := util.NewStringSet(p.getCurrentResourceNames()...)
@@ -127,7 +131,7 @@ func (s *ParticipantTestSuite) TestGetCurrentResourceNames() {
 }
 
 func (s *ParticipantTestSuite) TestCarryOverPreviousCurrentStateWhenCurrentStateNotExist() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	keyBuilder := &KeyBuilder{TestClusterName}
@@ -163,7 +167,7 @@ func (s *ParticipantTestSuite) TestCarryOverPreviousCurrentStateWhenCurrentState
 }
 
 func (s *ParticipantTestSuite) TestCarryOverPreviousCurrentStateWhenCurrentStateExists() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	keyBuilder := &KeyBuilder{TestClusterName}
@@ -206,7 +210,7 @@ func (s *ParticipantTestSuite) TestCarryOverPreviousCurrentStateWhenCurrentState
 }
 
 func (s *ParticipantTestSuite) TestCarryOverPreviousCurrentStateForMultipleResources() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	numberOfResources := 3
@@ -282,11 +286,12 @@ func (s *ParticipantTestSuite) TestProcessMessages() {
 			counters[StateModelStateOffline][StateModelStateDropped]++
 			return nil
 		})
-	p := NewParticipant(zap.NewNop(), tally.NoopScope,
+	p, _ := NewParticipant(zap.NewNop(), tally.NoopScope,
 		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
-	s.NotNil(p)
-	p.RegisterStateModel(StateModelNameOnlineOffline, processor)
-	err := p.Connect()
+	pImpl := p.(*participant)
+	s.NotNil(pImpl)
+	pImpl.RegisterStateModel(StateModelNameOnlineOffline, processor)
+	err := pImpl.Connect()
 	s.NoError(err)
 	mu.Lock()
 	s.Equal(0, counters[StateModelStateOnline][StateModelStateOffline])
@@ -299,11 +304,11 @@ func (s *ParticipantTestSuite) TestProcessMessages() {
 	defer client.Disconnect()
 	accessor := newDataAccessor(client, keyBuilder)
 
-	msg := s.createMsg(p,
+	msg := s.createMsg(pImpl,
 		setMsgFieldsOp(model.FieldKeyFromState, StateModelStateOffline),
 		setMsgFieldsOp(model.FieldKeyToState, StateModelStateOnline),
 	)
-	accessor.createMsg(keyBuilder.participantMsg(p.instanceName, CreateRandomString()), msg)
+	accessor.createMsg(keyBuilder.participantMsg(pImpl.InstanceName(), CreateRandomString()), msg)
 	// wait for the participant to process messages
 	time.Sleep(2 * time.Second)
 	mu.Lock()
@@ -314,7 +319,7 @@ func (s *ParticipantTestSuite) TestProcessMessages() {
 }
 
 func (s *ParticipantTestSuite) TestUpdateCurrentState() {
-	p := s.createParticipantAndConnect()
+	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
 
 	keyBuilder := &KeyBuilder{TestClusterName}
@@ -328,11 +333,13 @@ func (s *ParticipantTestSuite) TestUpdateCurrentState() {
 	s.False(exists)
 
 	resource := CreateRandomString()
+	partition := strconv.Itoa(rand.Int())
 	msg := s.createMsg(p,
 		setMsgFieldsOp(model.FieldKeyFromState, StateModelStateOffline),
 		setMsgFieldsOp(model.FieldKeyToState, StateModelStateOnline),
 		setMsgFieldsOp(model.FieldKeyResourceName, resource),
 		setMsgFieldsOp(model.FieldKeyMsgType, MsgTypeStateTransition),
+		setMsgFieldsOp(model.FieldKeyPartitionName, partition),
 	)
 	accessor.createMsg(keyBuilder.participantMsg(p.instanceName, CreateRandomString()), msg)
 	// wait for the participant to process messages
@@ -341,24 +348,73 @@ func (s *ParticipantTestSuite) TestUpdateCurrentState() {
 	currentState, err := accessor.CurrentState(p.instanceName, p.zkClient.GetSessionID(), resource)
 	s.NoError(err)
 	s.Equal(int32(1), currentState.Version, "current state has been created and updated once")
+	s.Equal(currentState.GetState(partition), StateModelStateOnline)
+}
+
+func (s *ParticipantTestSuite) TestMismatchStateIsRejected() {
+	p, _ := s.createParticipantAndConnect()
+	defer p.Disconnect()
+
+	keyBuilder := &KeyBuilder{TestClusterName}
+	client := s.CreateAndConnectClient()
+	defer client.Disconnect()
+	accessor := newDataAccessor(client, keyBuilder)
+
+	currentStatePath := keyBuilder.currentStatesForSession(p.instanceName, p.zkClient.GetSessionID())
+	exists, _, err := client.Exists(currentStatePath)
+	s.NoError(err)
+	s.False(exists)
+
+	resource := CreateRandomString()
+	partition := strconv.Itoa(rand.Int())
+	msg := s.createMsg(p,
+		setMsgFieldsOp(model.FieldKeyFromState, StateModelStateOffline),
+		setMsgFieldsOp(model.FieldKeyToState, StateModelStateOnline),
+		setMsgFieldsOp(model.FieldKeyResourceName, resource),
+		setMsgFieldsOp(model.FieldKeyMsgType, MsgTypeStateTransition),
+		setMsgFieldsOp(model.FieldKeyPartitionName, partition),
+	)
+	accessor.createMsg(keyBuilder.participantMsg(p.instanceName, CreateRandomString()), msg)
+	// wait for the participant to process messages
+	time.Sleep(2 * time.Second)
+	currentState, err := accessor.CurrentState(p.instanceName, p.zkClient.GetSessionID(), resource)
+	s.NoError(err)
+	s.Equal(currentState.GetState(partition), StateModelStateOnline)
+
+	// the expected fromState is ONLINE, so the transition should be rejected
+	msg = s.createMsg(p,
+		setMsgFieldsOp(model.FieldKeyFromState, StateModelStateOffline),
+		setMsgFieldsOp(model.FieldKeyToState, StateModelStateDropped),
+		setMsgFieldsOp(model.FieldKeyResourceName, resource),
+		setMsgFieldsOp(model.FieldKeyMsgType, MsgTypeStateTransition),
+		setMsgFieldsOp(model.FieldKeyPartitionName, partition),
+	)
+	accessor.createMsg(keyBuilder.participantMsg(p.instanceName, CreateRandomString()), msg)
+	// wait for the participant to process messages
+	time.Sleep(2 * time.Second)
+	currentState, err = accessor.CurrentState(p.instanceName, p.zkClient.GetSessionID(), resource)
+	s.NoError(err)
+	// state should remain unchanged
+	s.Equal(currentState.GetState(partition), StateModelStateOnline)
 }
 
 func (s *ParticipantTestSuite) TestHandleNewSessionCalledAfterZookeeperSessionExpired() {
 	port := GetRandomPort()
-	p := NewParticipant(zap.NewNop(), tally.NoopScope,
+	p, _ := NewParticipant(zap.NewNop(), tally.NoopScope,
 		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
-	defer p.Disconnect()
+	pImpl := p.(*participant)
+	defer pImpl.Disconnect()
 	// set default state to StateHasSession so Participant would believe it is connected
 	fakeZK := uzk.NewFakeZk(uzk.DefaultConnectionState(zk.StateHasSession))
-	p.zkClient = uzk.NewClient(zap.NewNop(), tally.NoopScope, uzk.WithConnFactory(fakeZK),
+	pImpl.zkClient = uzk.NewClient(zap.NewNop(), tally.NoopScope, uzk.WithConnFactory(fakeZK),
 		uzk.WithRetryTimeout(time.Second))
-	p.Connect()
+	pImpl.Connect()
 	s.Len(fakeZK.GetConnections(), 1)
 
 	// Create(liveInstancePath) will be called if and only if a new session is created
 	// check the times it is called would infer the number of times a new session is created
 	fakeZKConnection := fakeZK.GetConnections()[0]
-	liveInstancePath := p.keyBuilder.liveInstance(p.instanceName)
+	liveInstancePath := pImpl.keyBuilder.liveInstance(pImpl.InstanceName())
 	methodHistory := fakeZKConnection.GetHistory()
 	historyForChildrenW := methodHistory.GetHistoryForMethod("Create")
 	s.Len(historyForChildrenW, 1)
@@ -373,7 +429,7 @@ func (s *ParticipantTestSuite) TestHandleNewSessionCalledAfterZookeeperSessionEx
 	s.Equal(historyForChildrenW[1].Params[0].(string), liveInstancePath)
 }
 
-func (s *ParticipantTestSuite) createMsg(p *Participant, ops ...msgOp) *model.Message {
+func (s *ParticipantTestSuite) createMsg(p *participant, ops ...msgOp) *model.Message {
 	msg := s.createValidMsg(p)
 	for _, op := range ops {
 		op(msg)
@@ -382,7 +438,7 @@ func (s *ParticipantTestSuite) createMsg(p *Participant, ops ...msgOp) *model.Me
 	return msg
 }
 
-func (s *ParticipantTestSuite) createValidMsg(p *Participant) *model.Message {
+func (s *ParticipantTestSuite) createValidMsg(p *participant) *model.Message {
 	msg := model.NewMsg(CreateRandomString())
 	msg.SetSimpleField(model.FieldKeyStateModelDef, StateModelNameOnlineOffline)
 	msg.SetSimpleField(model.FieldKeyTargetSessionID, p.zkClient.GetSessionID())

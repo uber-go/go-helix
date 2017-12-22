@@ -11,7 +11,7 @@ The Go implementation of [Apache Helix](https://helix.apache.org) (currently the
 ### Init participant
 
 ```go
-participant := NewParticipant(
+participant, fatalErrChan := NewParticipant(
 	zap.NewNop(),
 	tally.NoopScope,
 	"localhost:2181", // Zookeeper connect string
@@ -41,6 +41,11 @@ processor.AddTransition("ONLINE", "OFFLINE", func(m *model.Message) (err error) 
 participant.RegisterStateModel("OnlineOffline", processor)
 
 err := participant.Connect() // initialization is complete if err is nil
+
+// listen to the fatalError and handle the error by
+// 1. recreate participant from scratch and connect, or
+// 2. quit the program and restart
+faltalErr := <- faltalErrChan 
 ```
 
 ### Use participant

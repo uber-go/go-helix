@@ -47,10 +47,22 @@ var (
 		"helix participant: messsage is missing state model processor definition")
 	errMsgMissingFromOrToState = errors.New(
 		"helix participant: missing participant state transition info")
+	errMismatchState = errors.New(
+		"helix participant: from state in transition message is unexpected")
 )
 
 // Participant is the Helix participant
-type Participant struct {
+type Participant interface {
+	Connect() error
+	Disconnect()
+	IsConnected() bool
+	RegisterStateModel(stateModelName string, processor *StateModelProcessor)
+	DataAccessor() *DataAccessor
+	InstanceName() string
+	Process(e zk.Event)
+}
+
+type participant struct {
 	logger zap.Logger
 	scope  tally.Scope
 
@@ -65,11 +77,17 @@ type Participant struct {
 	// stateModelName->stateModelProcessor
 	stateModelProcessors     sync.Map
 	stateModelProcessorLocks map[string]*sync.Mutex
+	stateModel               StateModel
 	sync.Mutex
 	dataAccessor *DataAccessor
+
+	// fatalErrChan would notify user when a fatal error occurs
+	fatalErrChan chan error
 }
 
-// NewParticipant instantiates a Participant
+// NewParticipant instantiates a Participant,
+// when an error is sent from the error chan, it means participant sees nonrecoverable errors
+// user is expected to clean up and restart the program
 func NewParticipant(
 	logger *zap.Logger,
 	scope tally.Scope,
@@ -79,12 +97,13 @@ func NewParticipant(
 	resourceName string,
 	host string,
 	port int32,
-) *Participant {
+) (Participant, <-chan error) {
 	zkClient := uzk.NewClient(logger, scope, uzk.WithZkSvr(zkConnectString),
 		uzk.WithSessionTimeout(uzk.DefaultSessionTimeout))
 	keyBuilder := &KeyBuilder{clusterName}
 	instanceName := getInstanceName(host, port)
-	return &Participant{
+	fatalErrChan := make(chan error)
+	return &participant{
 		logger: *logger.With(
 			zap.String("application", application),
 			zap.String("cluster", clusterName),
@@ -105,11 +124,13 @@ func NewParticipant(
 		zkClient:                 zkClient,
 		stateModelProcessorLocks: make(map[string]*sync.Mutex),
 		dataAccessor:             newDataAccessor(zkClient, keyBuilder),
-	}
+		stateModel:               NewStateModel(),
+		fatalErrChan:             fatalErrChan,
+	}, fatalErrChan
 }
 
 // Connect let the participant connect to Zookeeper
-func (p *Participant) Connect() error {
+func (p *participant) Connect() error {
 	if p.zkClient.IsConnected() {
 		return nil
 	}
@@ -123,7 +144,7 @@ func (p *Participant) Connect() error {
 }
 
 // Disconnect let the participant disconnect from Zookeeper
-func (p *Participant) Disconnect() {
+func (p *participant) Disconnect() {
 	if !p.IsConnected() {
 		p.logger.Warn("helix instance already isDisconnected")
 		return
@@ -132,29 +153,29 @@ func (p *Participant) Disconnect() {
 }
 
 // IsConnected checks if the participant is connected to Zookeeper
-func (p *Participant) IsConnected() bool {
+func (p *participant) IsConnected() bool {
 	return p.zkClient.IsConnected()
 }
 
 // RegisterStateModel associates state trasition functions with the participant
-func (p *Participant) RegisterStateModel(stateModelName string, processor *StateModelProcessor) {
+func (p *participant) RegisterStateModel(stateModelName string, processor *StateModelProcessor) {
 	p.stateModelProcessors.Store(stateModelName, processor)
 	p.stateModelProcessorLocks[stateModelName] = &sync.Mutex{}
 }
 
 // DataAccessor returns the underlying accessor to help change Zookeeper data
-func (p *Participant) DataAccessor() *DataAccessor {
+func (p *participant) DataAccessor() *DataAccessor {
 	return p.dataAccessor
 }
 
 // InstanceName returns the instance name of the participant
-func (p *Participant) InstanceName() string {
+func (p *participant) InstanceName() string {
 	return p.instanceName
 }
 
 // isClusterSetup ensures the Helix cluster is set up
 // mirrors org.apache.helix.manager.zk.ZKUtil#isClusterSetup
-func (p *Participant) isClusterSetup() (bool, error) {
+func (p *participant) isClusterSetup() (bool, error) {
 	return p.zkClient.ExistsAll(
 		p.keyBuilder.cluster(),
 		p.keyBuilder.controller(),
@@ -173,7 +194,7 @@ func (p *Participant) isClusterSetup() (bool, error) {
 	)
 }
 
-func (p *Participant) createLiveInstance() error {
+func (p *participant) createLiveInstance() error {
 	p.logger.Info("start to create live instance")
 	path := p.keyBuilder.liveInstance(p.instanceName)
 	node := model.NewLiveInstance(p.instanceName, p.zkClient.GetSessionID())
@@ -196,7 +217,7 @@ func (p *Participant) createLiveInstance() error {
 	return err
 }
 
-func (p *Participant) createClient() error {
+func (p *participant) createClient() error {
 	// TODO: refactor out the retry count
 	for retryCount := 0; retryCount < 3; {
 		err := p.zkClient.Connect()
@@ -217,12 +238,14 @@ func (p *Participant) createClient() error {
 }
 
 // Process can be called from a separate goroutine
-func (p *Participant) Process(e zk.Event) {
+func (p *participant) Process(e zk.Event) {
 	switch e.State {
 	case zk.StateHasSession:
 		p.logger.Info("zookeeper session created", zap.String("sessionID", p.zkClient.GetSessionID()))
 		if err := p.handleNewSession(); err != nil {
 			p.logger.Error("handle new session failed", zap.Error(err))
+			// handleNewSession() error is fatal, inform user to clean up and restart
+			p.sendFatalError(err)
 		} else {
 			p.logger.Info("handle new session succeed")
 		}
@@ -231,9 +254,12 @@ func (p *Participant) Process(e zk.Event) {
 	}
 }
 
-// TODO (zhixin): handle error when session is recreated
-// if some of the ops fail halfway, call handleNewSession again will still have error
-func (p *Participant) handleNewSession() error {
+func (p *participant) sendFatalError(err error) {
+	p.scope.Counter("fatal-errors").Inc(1)
+	p.fatalErrChan <- err
+}
+
+func (p *participant) handleNewSession() error {
 	isSetup, err := p.isClusterSetup()
 	if err != nil {
 		return err
@@ -248,12 +274,15 @@ func (p *Participant) handleNewSession() error {
 	if err != nil {
 		return err
 	}
-	p.carryOverPreviousCurrentState()
+	err = p.carryOverPreviousCurrentState()
+	if err != nil {
+		return err
+	}
 	p.setupMsgHandler()
 	return nil
 }
 
-func (p *Participant) joinCluster() error {
+func (p *participant) joinCluster() error {
 	// check if instance is set up
 	participantConfigKey := p.keyBuilder.participantConfig(p.instanceName)
 	isInstanceSetup, _, err := p.zkClient.Exists(participantConfigKey)
@@ -286,7 +315,6 @@ func (p *Participant) joinCluster() error {
 	instanceConfig.SetEnabled(true)
 
 	err = p.dataAccessor.createInstanceConfig(participantConfigKey, instanceConfig)
-
 	if err != nil {
 		return errors.Wrap(err, "failed to create participant config when joinCluster")
 	}
@@ -330,12 +358,12 @@ func (p *Participant) joinCluster() error {
 	return nil
 }
 
-func (p *Participant) setupMsgHandler() {
+func (p *participant) setupMsgHandler() {
 	msgCh, errCh, stopCh := p.watchMessages()
 	go p.handleMessages(msgCh, errCh, stopCh)
 }
 
-func (p *Participant) watchMessages() (chan []string, chan error, chan struct{}) {
+func (p *participant) watchMessages() (chan []string, chan error, chan struct{}) {
 	msgCh := make(chan []string)
 	errCh := make(chan error)
 	stopCh := make(chan struct{})
@@ -375,7 +403,7 @@ func (p *Participant) watchMessages() (chan []string, chan error, chan struct{})
 	return msgCh, errCh, stopCh
 }
 
-func (p *Participant) handleMessages(
+func (p *participant) handleMessages(
 	msgCh <-chan []string, errCh <-chan error, stopCh <-chan struct{}) {
 	for {
 		select {
@@ -387,8 +415,12 @@ func (p *Participant) handleMessages(
 				break
 			}
 			p.processMessages(messages)
-		case err := <-errCh:
+		case err, ok := <-errCh:
+			if !ok {
+				break
+			}
 			p.logger.Error("participant message processor has an error after retries", zap.Error(err))
+			p.sendFatalError(err)
 			// TODO(yulun): allow services to pass in callback func to handle conn failures
 		case <-stopCh:
 			p.logger.Info("stop handling messages")
@@ -397,7 +429,7 @@ func (p *Participant) handleMessages(
 	}
 }
 
-func (p *Participant) handleMsg(msg *model.Message) error {
+func (p *participant) handleMsg(msg *model.Message) error {
 	// locking mirrors org.apache.helix.messaging.handling.HelixStateTransitionHandler#handleMessage
 	// in Java synchronized on _stateModel
 	mu, ok := p.stateModelProcessorLocks[msg.GetStateModelDef()]
@@ -410,10 +442,10 @@ func (p *Participant) handleMsg(msg *model.Message) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// TODO(yulun): add preHandleMsg
-
-	handleMsgErr := p.handleStateTransition(msg)
-
+	handleMsgErr := p.preHandleMsg(msg)
+	if handleMsgErr == nil {
+		handleMsgErr = p.handleStateTransition(msg)
+	}
 	// TODO: should the message be deleted from ZK after successful processing?
 	// https://github.com/yichen/gohelix/blob/master/participant.go#L364
 	p.postHandleMsg(msg, handleMsgErr)
@@ -434,7 +466,34 @@ func (p *Participant) handleMsg(msg *model.Message) error {
 	return handleMsgErr
 }
 
-func (p *Participant) postHandleMsg(msg *model.Message, handleMsgErr error) {
+func (p *participant) preHandleMsg(msg *model.Message) error {
+	//TODO: verify msg is valid
+	fromState := msg.GetFromState()
+	partitionName, _ := msg.GetPartitionName()
+	stateModelDef, err := p.dataAccessor.StateModelDef(msg.GetStateModelDef())
+	if err != nil {
+		return err
+	}
+	// if there is no local state for the resource/partition, set it to init state
+	localState, exist := p.stateModel.GetState(msg.GetResourceName(), partitionName)
+	if !exist {
+		initialState := stateModelDef.GetInitialState()
+		localState = initialState
+		p.stateModel.UpdateState(msg.GetResourceName(), partitionName, initialState)
+	}
+	if fromState != "" && fromState != "*" &&
+		strings.ToLower(fromState) != strings.ToLower(localState) {
+		p.logger.Warn("get unexpected fromState when handling transition",
+			zap.String("expected", localState),
+			zap.String("actual", fromState),
+			zap.String("partition", partitionName),
+		)
+		return errMismatchState
+	}
+	return nil
+}
+
+func (p *participant) postHandleMsg(msg *model.Message, handleMsgErr error) {
 	// sessionID might change when we update the state model
 	// skip if we are handling an expired session
 	sessionID := p.zkClient.GetSessionID()
@@ -447,37 +506,46 @@ func (p *Participant) postHandleMsg(msg *model.Message, handleMsgErr error) {
 		return
 	}
 
-	var toState string
+	var targetState string
 	partitionName, _ := msg.GetPartitionName()
 	if handleMsgErr == nil {
 		// if the target state is DROPPED, we need to remove the partition name
 		// from the current state of the instance because the partition is dropped.
 		// In the state model it will stay as OFFLINE, which is OK.
 		if strings.ToUpper(msg.GetToState()) == StateModelStateDropped {
-			path := p.keyBuilder.currentStateForResource(p.instanceName, sessionID, msg.GetResourceName())
-			err := p.zkClient.RemoveMapFieldKey(path, partitionName)
+			currentStateForResourcePath := p.keyBuilder.currentStateForResource(
+				p.instanceName, sessionID, msg.GetResourceName())
+			err := p.zkClient.RemoveMapFieldKey(currentStateForResourcePath, partitionName)
 			if err != nil {
 				p.logger.Error("error removing dropped partition", zap.Error(err))
+			} else {
+				// update local state only after zk is successfully updated
+				p.stateModel.RemoveState(msg.GetResourceName(), partitionName)
 			}
 			return
 		}
-		toState = msg.GetToState()
+		targetState = msg.GetToState()
+	} else if handleMsgErr == errMismatchState {
+		targetState, _ = p.stateModel.GetState(msg.GetResourceName(), partitionName)
 	} else {
-		toState = "ERROR"
+		targetState = "ERROR"
 		p.logger.Error("error handling msg", zap.Error(handleMsgErr))
 	}
 	// actually set the current state
 	currentStateForResourcePath := p.keyBuilder.currentStateForResource(p.instanceName,
-		p.zkClient.GetSessionID(), msg.GetResourceName())
+		sessionID, msg.GetResourceName())
 
 	err := p.zkClient.UpdateMapField(currentStateForResourcePath, partitionName,
-		model.FieldKeyCurrentState, toState)
+		model.FieldKeyCurrentState, targetState)
 	if err != nil {
 		p.logger.Error("failed to update current state in postHandleMsg", zap.Error(err))
+	} else {
+		// update local state only after zk is successfully updated
+		p.stateModel.UpdateState(msg.GetResourceName(), partitionName, targetState)
 	}
 }
 
-func (p *Participant) handleStateTransition(msg *model.Message) error {
+func (p *participant) handleStateTransition(msg *model.Message) error {
 	fromState := msg.GetFromState()
 	toState := msg.GetToState()
 	if fromState == "" || toState == "" {
@@ -492,6 +560,7 @@ func (p *Participant) handleStateTransition(msg *model.Message) error {
 		processor := val.(*StateModelProcessor)
 		if toStateHandler, ok := processor.Transitions[fromState]; ok {
 			if handler, ok := toStateHandler[toState]; ok {
+				// TODO: deal with handler error
 				handler(msg)
 				return nil
 			}
@@ -502,12 +571,12 @@ func (p *Participant) handleStateTransition(msg *model.Message) error {
 	return errors.Errorf("handler from state %v to state %v not found", fromState, toState)
 }
 
-func (p *Participant) getCurrentResourceNames() []string {
+func (p *participant) getCurrentResourceNames() []string {
 	sessionID := p.zkClient.GetSessionID()
 	return p.getCurrentResourceNamesForSession(sessionID)
 }
 
-func (p *Participant) getCurrentResourceNamesForSession(sessionID string) []string {
+func (p *participant) getCurrentResourceNamesForSession(sessionID string) []string {
 	currentResourcesPath := p.keyBuilder.currentStatesForSession(p.instanceName, sessionID)
 	resources, err := p.zkClient.Children(currentResourcesPath)
 	if err != nil && errors.Cause(err) != zk.ErrNoNode {
@@ -516,7 +585,7 @@ func (p *Participant) getCurrentResourceNamesForSession(sessionID string) []stri
 	return resources
 }
 
-func (p *Participant) processMessages(messages []*model.Message) {
+func (p *participant) processMessages(messages []*model.Message) {
 	sessionID := p.zkClient.GetSessionID()
 	var messagesToHandle []*model.Message
 	var msgPathsToUpdate []string
@@ -608,13 +677,13 @@ func (p *Participant) processMessages(messages []*model.Message) {
 	}
 }
 
-func (p *Participant) carryOverPreviousCurrentState() {
+func (p *participant) carryOverPreviousCurrentState() error {
 	currentStatesPath := p.keyBuilder.currentStates(p.instanceName)
 
 	sessionIDs, err := p.zkClient.Children(currentStatesPath)
 	if err != nil {
 		p.logger.Error("failed to get previous currentStates", zap.Error(err))
-		return
+		return err
 	}
 
 	for _, sessionID := range sessionIDs {
@@ -624,6 +693,7 @@ func (p *Participant) carryOverPreviousCurrentState() {
 		if err := p.carryOverPreviousCurrentStateFromSession(sessionID); err != nil {
 			p.logger.Error("failed to carry over previous state",
 				zap.Error(err), zap.String("session", sessionID))
+			return err
 		}
 	}
 
@@ -635,13 +705,15 @@ func (p *Participant) carryOverPreviousCurrentState() {
 		path := currentStatesPath + "/" + sessionID
 		p.logger.Info("removing current states from previous sessionIDs.", zap.String("path", path))
 		err = p.zkClient.DeleteTree(path)
-		if err != nil {
+		if err != nil && errors.Cause(err) != zk.ErrNoNode {
 			p.logger.Error("failed to remove previous state", zap.Error(err))
+			return err
 		}
 	}
+	return nil
 }
 
-func (p *Participant) carryOverPreviousCurrentStateFromSession(sessionID string) error {
+func (p *participant) carryOverPreviousCurrentStateFromSession(sessionID string) error {
 	for _, resource := range p.getCurrentResourceNamesForSession(sessionID) {
 		p.logger.Info("carry over from old session",
 			zap.String("oldSession", sessionID),
@@ -662,9 +734,11 @@ func (p *Participant) carryOverPreviousCurrentStateFromSession(sessionID string)
 		if err != nil {
 			return err
 		}
+
 		initialState := stateModelDef.GetInitialState()
 		currentStatePath := p.dataAccessor.keyBuilder.currentStateForResource(
 			p.instanceName, p.zkClient.GetSessionID(), resource)
+
 		err = p.dataAccessor.updateData(currentStatePath,
 			func(currentStateData *model.ZNRecord) (*model.ZNRecord, error) {
 				var currentState *model.CurrentState
@@ -692,7 +766,7 @@ func (p *Participant) carryOverPreviousCurrentStateFromSession(sessionID string)
 }
 
 // getMessages returns all message for participant
-func (p *Participant) getMessages(msgIDs []string) ([]*model.Message, error) {
+func (p *participant) getMessages(msgIDs []string) ([]*model.Message, error) {
 	res := make([]*model.Message, 0, len(msgIDs))
 	for i := 0; i < len(msgIDs); i++ {
 		path := p.keyBuilder.participantMsg(p.instanceName, msgIDs[i])
