@@ -4,8 +4,8 @@ vendor/
 # Ignore the dev zookeeper data
 zookeeper-data/
 
-# Ignore log files
-*.log
+# Ignore coverage file
+coverage.txt
 
 # IDE artifacts
 .idea/*
