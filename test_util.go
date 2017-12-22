@@ -88,16 +88,17 @@ func (s *BaseHelixTestSuite) ensureHelixClusterUp() {
 	s.NoError(err, "error setting cluster config")
 }
 
-func (s *BaseHelixTestSuite) createParticipantAndConnect() *Participant {
+func (s *BaseHelixTestSuite) createParticipantAndConnect() (*participant, <-chan error) {
 	port := GetRandomPort()
-	p := NewParticipant(zap.NewNop(), tally.NoopScope,
+	p, errChan := NewParticipant(zap.NewNop(), tally.NoopScope,
 		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
+	pImpl := p.(*participant)
 	s.NotNil(p)
 	p.RegisterStateModel(StateModelNameOnlineOffline, createNoopStateModelProcessor())
-	log.Println("Created participant ", p.instanceName)
+	log.Println("Created participant ", pImpl.instanceName)
 	err := p.Connect()
 	s.NoError(err)
-	return p
+	return pImpl, errChan
 }
 
 func createNoopStateModelProcessor() *StateModelProcessor {
