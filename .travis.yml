@@ -3,7 +3,7 @@ go:
   - 1.9
 env:
   global:
-    - TEST_TIMEOUT_SCALE=20
+    - TEST_TIMEOUT_SCALE=40
 cache:
   directories:
     - vendor

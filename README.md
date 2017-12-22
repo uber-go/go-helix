@@ -1,6 +1,8 @@
 # go-helix [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci] [![Coverage Status][cov-img]][cov]
 
-The Go implementation of [Apache Helix](https://helix.apache.org) (currently the participant part only).
+A Go implementation of [Apache Helix](https://helix.apache.org). 
+
+Currently the participant part only, compatible with the Apache Helix Java controller.
 
 ## Installation
 
@@ -42,10 +44,10 @@ participant.RegisterStateModel("OnlineOffline", processor)
 
 err := participant.Connect() // initialization is complete if err is nil
 
-// listen to the fatalError and handle the error by
+// listen to the fatal error channel and handle the error by
 // 1. recreate participant from scratch and connect, or
 // 2. quit the program and restart
-faltalErr := <- faltalErrChan 
+fatalErr := <- fatalErrChan
 ```
 
 ### Use participant
@@ -77,8 +79,7 @@ Released under the [MIT License](LICENSE).
 
 [doc-img]: https://godoc.org/github.com/uber-go/go-helix?status.svg
 [doc]: https://godoc.org/github.com/uber-go/go-helix
-[//]: # (TODO: update to https://travis-ci.org/uber-go/go-helix after making the repo public)
-[ci-img]: https://travis-ci.com/uber-go/go-helix.svg?token=iecXysxCKpLxFnkjyQYH&branch=master
-[ci]: https://travis-ci.com/uber-go/go-helix
+[ci-img]: https://travis-ci.org/uber-go/go-helix.svg?branch=master
+[ci]: https://travis-ci.org/uber-go/go-helix
 [cov-img]: https://codecov.io/gh/uber-go/go-helix/branch/master/graph/badge.svg
 [cov]: https://codecov.io/gh/uber-go/go-helix
