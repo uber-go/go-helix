@@ -20,6 +20,7 @@
 
 package helix
 
+// constants shared accorss the project
 const (
 	StateModelNameOnlineOffline = "OnlineOffline"
 
