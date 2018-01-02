@@ -146,11 +146,11 @@ func (s *ZKClientTestSuite) TestZkSizeLimit() {
 	legalData := make([]byte, numMb-128)
 	legalData2 := make([]byte, numMb-128)
 	legalData2[0] = 1
-	largeData := make([]byte, numMb)
+	oversizeData := make([]byte, numMb)
 	path := s.createRandomPath()
 
 	// create fails if data exceeds 1MB
-	err := client.Create(path, largeData, FlagsZero, ACLPermAll)
+	err := client.Create(path, oversizeData, FlagsZero, ACLPermAll)
 	s.Error(err)
 
 	// create succeeds if data size is legal
@@ -160,7 +160,7 @@ func (s *ZKClientTestSuite) TestZkSizeLimit() {
 	s.Equal(res, legalData)
 
 	// set fails if data exceeds 1MB
-	err = client.Set(path, largeData, -1)
+	err = client.Set(path, oversizeData, -1)
 	s.Error(err)
 
 	// set succeeds if data size is legal
