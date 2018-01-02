@@ -20,7 +20,6 @@
 
 package helix
 
-// TODO: add all the shared constants here
 const (
 	StateModelNameOnlineOffline = "OnlineOffline"
 
