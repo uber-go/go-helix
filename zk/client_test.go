@@ -138,8 +138,44 @@ func (s *ZKClientTestSuite) TestRetryUntilConnectedWithSignal() {
 	z.stop()
 }
 
+// TestZkSizeLimit ensures zk write/update requests fail if size exceeds 1MB
+func (s *ZKClientTestSuite) TestZkSizeLimit() {
+	client := s.CreateAndConnectClient()
+	defer client.Disconnect()
+	numMb := 1024 * 1024
+	legalData := make([]byte, numMb-128)
+	legalData2 := make([]byte, numMb-128)
+	legalData2[0] = 1
+	largeData := make([]byte, numMb)
+	path := s.createRandomPath()
+
+	// create fails if data exceeds 1MB
+	err := client.Create(path, largeData, FlagsZero, ACLPermAll)
+	s.Error(err)
+
+	// create succeeds if data size is legal
+	err = client.Create(path, legalData, FlagsZero, ACLPermAll)
+	s.Nil(err)
+	res, _, err := client.Get(path)
+	s.Equal(res, legalData)
+
+	// set fails if data exceeds 1MB
+	err = client.Set(path, largeData, -1)
+	s.Error(err)
+
+	// set succeeds if data size is legal
+	err = client.Set(path, legalData2, -1)
+	s.Nil(err)
+	res, _, err = client.Get(path)
+	s.Equal(res, legalData2)
+}
+
 func (s *ZKClientTestSuite) createClientWithFakeConn(z *FakeZk) *Client {
 	return NewClient(zap.NewNop(), tally.NoopScope, WithConnFactory(z), WithRetryTimeout(time.Second))
+}
+
+func (s ZKClientTestSuite) createRandomPath() string {
+	return fmt.Sprintf("/%d", rand.Int63())
 }
 
 // getFailOnceFunc returns a function that succeeds on second invocation
