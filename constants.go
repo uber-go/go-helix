@@ -20,6 +20,7 @@
 
 package helix
 
+// Helix constants
 const (
 	StateModelNameOnlineOffline = "OnlineOffline"
 

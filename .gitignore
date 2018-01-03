@@ -9,3 +9,7 @@ coverage.txt
 
 # IDE artifacts
 .idea/*
+
+# Ignore system files
+*.swp
+*.log
