@@ -58,6 +58,22 @@ func (s *ParticipantTestSuite) TestConnectAndDisconnect() {
 	s.Admin.DropInstance(TestClusterName, p2.instanceName)
 }
 
+func (s *ParticipantTestSuite) TestParticipantNameCollision() {
+	port := GetRandomPort()
+	p1, _ := NewParticipant(zap.NewNop(), tally.NoopScope,
+		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
+	s.NotNil(p1)
+	p1.RegisterStateModel(StateModelNameOnlineOffline, createNoopStateModelProcessor())
+	err := p1.Connect()
+	s.NoError(err)
+	p2, _ := NewParticipant(zap.NewNop(), tally.NoopScope,
+		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
+	s.NotNil(p2)
+	p2.RegisterStateModel(StateModelNameOnlineOffline, createNoopStateModelProcessor())
+	err = p2.Connect()
+	s.Error(err)
+}
+
 func (s *ParticipantTestSuite) TestIsClusterSetup() {
 	p, _ := s.createParticipantAndConnect()
 	defer p.Disconnect()
