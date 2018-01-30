@@ -22,6 +22,7 @@ package helix
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -163,6 +164,39 @@ func (s *DataAccessorTestSuite) TestGetStateModelDef() {
 	leaderStandbyModel, err := accessor.StateModelDef("LeaderStandby")
 	s.NoError(err)
 	s.Equal(leaderStandbyModel.GetInitialState(), StateModelStateOffline)
+}
+
+func (s *DataAccessorTestSuite) TestIdealState() {
+	cluster, resource := CreateRandomString(), CreateRandomString()
+	admin, err := NewAdmin(s.ZkConnectString)
+	s.NoError(err)
+	addedCluster := admin.AddCluster(cluster, false)
+	s.True(addedCluster)
+	numPartitions := rand.Int()
+	err = admin.AddResource(cluster, resource, numPartitions, StateModelNameOnlineOffline)
+	s.NoError(err)
+
+	keyBuilder := &KeyBuilder{cluster}
+	client := s.CreateAndConnectClient()
+	defer client.Disconnect()
+	accessor := newDataAccessor(client, keyBuilder)
+	idealState, err := accessor.IdealState(resource)
+	s.NoError(err)
+	s.Equal(numPartitions, idealState.GetNumPartitions())
+}
+
+func (s *DataAccessorTestSuite) TestLiveInstance() {
+	p, _ := s.createParticipantAndConnect()
+	s.NotNil(p)
+
+	keyBuilder := &KeyBuilder{TestClusterName}
+	client := s.CreateAndConnectClient()
+	defer client.Disconnect()
+	accessor := newDataAccessor(client, keyBuilder)
+
+	liveInstance, err := accessor.LiveInstance(p.InstanceName())
+	s.NoError(err)
+	s.Equal(liveInstance.GetSessionID(), p.zkClient.GetSessionID())
 }
 
 func (s *DataAccessorTestSuite) assertCurrentState(

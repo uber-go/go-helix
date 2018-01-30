@@ -169,7 +169,8 @@ func (a *DataAccessor) createMsg(path string, msg *model.Message) error {
 	return a.createData(path, msg.ZNRecord)
 }
 
-// CreateParticipantMsg creates a message for the participant
+// CreateParticipantMsg creates a message for the participant and helps
+// testing the participant
 func (a *DataAccessor) CreateParticipantMsg(instanceName string, msg *model.Message) error {
 	path := a.keyBuilder.participantMsg(instanceName, msg.ID)
 	return a.createData(path, msg.ZNRecord)
