@@ -357,7 +357,7 @@ func (s *ParticipantTestSuite) TestUpdateCurrentState() {
 		setMsgFieldsOp(model.FieldKeyMsgType, MsgTypeStateTransition),
 		setMsgFieldsOp(model.FieldKeyPartitionName, partition),
 	)
-	accessor.createMsg(keyBuilder.participantMsg(p.instanceName, CreateRandomString()), msg)
+	accessor.CreateParticipantMsg(p.instanceName, msg)
 	// wait for the participant to process messages
 	time.Sleep(2 * time.Second)
 
