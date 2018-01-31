@@ -56,6 +56,15 @@ func (s *ZKClientTestSuite) TearDownTest() {
 	}
 }
 
+func (s *ZKClientTestSuite) TestEmbeddedZk() {
+	zkServer := "localhost:2182"
+	err := EnsureZookeeperUp(zkServer)
+	s.NoError(err)
+
+	err = StopZookeeper(s.EmbeddedZkPath)
+	s.NoError(err)
+}
+
 func (s *ZKClientTestSuite) TestZKConnectAndDisconnect() {
 	s.False(s.zkClient.IsConnected())
 
