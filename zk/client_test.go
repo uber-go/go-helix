@@ -61,6 +61,8 @@ func (s *ZKClientTestSuite) TestEmbeddedZk() {
 	s.NoError(err)
 	err = StopZookeeper(s.EmbeddedZkPath)
 	s.NoError(err)
+	err = EnsureZookeeperUp(s.EmbeddedZkPath)
+	s.NoError(err)
 }
 
 func (s *ZKClientTestSuite) TestZKConnectAndDisconnect() {

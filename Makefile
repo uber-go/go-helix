@@ -35,7 +35,7 @@ endif
 
 .PHONY: test
 test:
-	go test -race $(PKGS)
+	go test -p 1 -race $(PKGS)
 
 .PHONY: cover
 cover:
