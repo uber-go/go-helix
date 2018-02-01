@@ -56,6 +56,15 @@ func (s *ZKClientTestSuite) TearDownTest() {
 	}
 }
 
+func (s *ZKClientTestSuite) TestEmbeddedZk() {
+	err := EnsureZookeeperUp(s.EmbeddedZkPath)
+	s.NoError(err)
+	err = StopZookeeper(s.EmbeddedZkPath)
+	s.NoError(err)
+	err = EnsureZookeeperUp(s.EmbeddedZkPath)
+	s.NoError(err)
+}
+
 func (s *ZKClientTestSuite) TestZKConnectAndDisconnect() {
 	s.False(s.zkClient.IsConnected())
 
