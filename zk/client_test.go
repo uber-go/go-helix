@@ -48,8 +48,8 @@ type CountEventWatcher struct {
 
 func (w *CountEventWatcher) Process(e zk.Event) {
 	w.Lock()
+	defer w.Unlock()
 	w.count++
-	w.Unlock()
 }
 
 func (w *CountEventWatcher) GetCount() int {
