@@ -21,6 +21,7 @@
 package model
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,6 +81,14 @@ func TestInstanceConfig(t *testing.T) {
 	assert.False(t, config.GetEnabled())
 	config.SetEnabled(true)
 	assert.True(t, config.GetEnabled())
+	host := "test_host"
+	port := rand.Int()
+	config.SetHost(host)
+	config.SetPort(port)
+	hostVal, ok := config.GetSimpleField(FieldKeyHelixHost)
+	assert.True(t, ok)
+	assert.Equal(t, host, hostVal)
+	assert.Equal(t, port, config.GetIntField(FieldKeyHelixPort, port+1))
 }
 
 func TestLiveInstanceConfig(t *testing.T) {
