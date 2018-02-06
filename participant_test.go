@@ -52,6 +52,9 @@ func (s *ParticipantTestSuite) TestConnectAndDisconnect() {
 	p1, _ := s.createParticipantAndConnect()
 	p1.Disconnect()
 	s.Admin.DropInstance(TestClusterName, p1.instanceName)
+	s.False(p1.IsConnected())
+	// disconnect twice doesn't cause panics
+	p1.Disconnect()
 
 	p2, _ := s.createParticipantAndConnect()
 	p2.Disconnect()

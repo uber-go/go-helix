@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,23 @@ type ZKClientTestSuite struct {
 	BaseZkTestSuite
 
 	zkClient *Client
+}
+
+type CountEventWatcher struct {
+	count int
+	sync.RWMutex
+}
+
+func (w *CountEventWatcher) Process(e zk.Event) {
+	w.Lock()
+	defer w.Unlock()
+	w.count++
+}
+
+func (w *CountEventWatcher) GetCount() int {
+	w.RLock()
+	defer w.RUnlock()
+	return w.count
 }
 
 func TestZKClientTestSuite(t *testing.T) {
@@ -71,6 +89,7 @@ func (s *ZKClientTestSuite) TestZKConnectAndDisconnect() {
 	err := s.zkClient.Connect()
 	s.NoError(err)
 	s.True(s.zkClient.IsConnected())
+	s.True(len(s.zkClient.GetSessionID()) > 0)
 
 	s.zkClient.Disconnect()
 	// time.Sleep is needed because ZK client disconnects asynchronously,
@@ -81,7 +100,10 @@ func (s *ZKClientTestSuite) TestZKConnectAndDisconnect() {
 
 func (s *ZKClientTestSuite) TestBasicZkOps() {
 	testData := fmt.Sprintf("%d", rand.Int())
+	testData1 := fmt.Sprintf("%d", rand.Int())
 	testPath := fmt.Sprintf("/%d/%d", rand.Int63(), rand.Int63())
+	testPath1 := fmt.Sprintf("/%d/%d", rand.Int63(), rand.Int63())
+
 	err := s.zkClient.CreateDataWithPath(testPath, []byte(testData))
 	s.Equal(errOpBeforeConnect, errors.Cause(err))
 	err = s.zkClient.Connect()
@@ -89,14 +111,49 @@ func (s *ZKClientTestSuite) TestBasicZkOps() {
 	s.True(s.zkClient.IsConnected())
 	err = s.zkClient.CreateDataWithPath(testPath, []byte(testData))
 	s.NoError(err)
-	bytes, _, err := s.zkClient.Get(testPath)
+	bytes, stat, err := s.zkClient.Get(testPath)
 	s.NoError(err)
 	s.Equal(testData, string(bytes))
+	s.Equal(int32(0), stat.Version)
+	err = s.zkClient.SetWithDefaultVersion(testPath, []byte(testData1))
+	s.NoError(err)
+	bytes, eventCh, err := s.zkClient.GetW(testPath)
+	s.NoError(err)
+	s.Equal(testData1, string(bytes))
+	err = s.zkClient.Set(testPath, []byte(testData), 1)
+	ev := <-eventCh
+	s.Equal(zk.EventNodeDataChanged, ev.Type)
+
 	parent := path.Dir(testPath)
+	paths, eventCh, err := s.zkClient.ChildrenW(parent)
+	s.NoError(err)
+	s.Equal(1, len(paths))
+	s.zkClient.Delete(testPath)
+	ev = <-eventCh
+	s.Equal(zk.EventNodeChildrenChanged, ev.Type)
 	err = s.zkClient.DeleteTree(parent)
 	s.NoError(err)
 	exists, _, err := s.zkClient.Exists(parent)
 	s.False(exists)
+
+	err = s.zkClient.CreateDataWithPath(testPath, []byte(testData))
+	s.NoError(err)
+	s.False(s.zkClient.ExistsAll(testPath, testPath1))
+	err = s.zkClient.CreateDataWithPath(testPath1, []byte(testData))
+	s.NoError(err)
+	s.True(s.zkClient.ExistsAll(testPath, testPath1))
+}
+
+func (s *ZKClientTestSuite) TestWatcher() {
+	c := NewClient(zap.NewNop(), tally.NoopScope, WithZkSvr(s.ZkConnectString),
+		WithSessionTimeout(DefaultSessionTimeout))
+	watcher := &CountEventWatcher{}
+	c.AddWatcher(watcher)
+	err := c.Connect()
+	s.NoError(err)
+	s.Equal(3, watcher.GetCount())
+	c.Disconnect()
+	s.Equal(3, watcher.GetCount())
 }
 
 // TestRetryUntilConnected func failed once then succeeds on retry if the client is connected
