@@ -490,15 +490,6 @@ func (c *Client) GetSimpleFieldValueByKey(path string, key string) (string, erro
 	return v, nil
 }
 
-// GetSimpleFieldBool checks if value in path is "TRUE"
-func (c *Client) GetSimpleFieldBool(path string, key string) (bool, error) {
-	result, err := c.GetSimpleFieldValueByKey(path, key)
-	if err == nil {
-		return strings.ToUpper(result) == "TRUE", nil
-	}
-	return false, err
-}
-
 // DeleteTree removes ZK path and its children
 func (c *Client) DeleteTree(path string) error {
 	if exists, _, err := c.Exists(path); !exists || err != nil {
