@@ -432,7 +432,7 @@ func (c *Client) UpdateMapField(path string, key string, property string, value 
 	// update the value
 	node.SetMapField(key, property, value)
 
-	// mashall to bytes
+	// marshall to bytes
 	data, err = node.Marshal()
 	if err != nil {
 		return err
@@ -459,7 +459,7 @@ func (c *Client) UpdateSimpleField(path string, key string, value string) error 
 	// update the value
 	node.SetSimpleField(key, value)
 
-	// mashall to bytes
+	// marshall to bytes
 	data, err = node.Marshal()
 	if err != nil {
 		return err
