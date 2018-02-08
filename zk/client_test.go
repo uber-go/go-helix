@@ -196,6 +196,7 @@ func (s *ZKClientTestSuite) TestRetryUntilConnected() {
 	client := s.createClientWithFakeConn(z)
 	invokeCounter := 0
 	client.Connect()
+	s.Equal(1, len(z.GetConnections()))
 	z.SetState(client.zkConn, zk.StateHasSession)
 	s.NoError(client.retryUntilConnected(getFailOnceFunc(&invokeCounter)))
 	s.Equal(2, invokeCounter)
