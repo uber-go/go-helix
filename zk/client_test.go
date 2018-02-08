@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/samuel/go-zookeeper/zk"
 	"github.com/stretchr/testify/suite"
+	"github.com/uber-go/go-helix/model"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 )
@@ -131,10 +132,12 @@ func (s *ZKClientTestSuite) TestBasicZkOps() {
 	s.zkClient.Delete(testPath)
 	ev = <-eventCh
 	s.Equal(zk.EventNodeChildrenChanged, ev.Type)
+	exists, _, err := s.zkClient.Exists(parent)
+	s.True(exists)
+	err = s.zkClient.CreateDataWithPath(testPath, []byte(testData))
+	s.NoError(err)
 	err = s.zkClient.DeleteTree(parent)
 	s.NoError(err)
-	exists, _, err := s.zkClient.Exists(parent)
-	s.False(exists)
 
 	err = s.zkClient.CreateDataWithPath(testPath, []byte(testData))
 	s.NoError(err)
@@ -142,6 +145,37 @@ func (s *ZKClientTestSuite) TestBasicZkOps() {
 	err = s.zkClient.CreateDataWithPath(testPath1, []byte(testData))
 	s.NoError(err)
 	s.True(s.zkClient.ExistsAll(testPath, testPath1))
+}
+
+func (s *ZKClientTestSuite) TestHelixRecordOps() {
+	path := fmt.Sprintf("/%d", rand.Int63())
+	partition := fmt.Sprintf("partition_%d", rand.Int())
+	state := "ONLINE"
+	key := fmt.Sprintf("%d", rand.Int())
+	value := fmt.Sprintf("%d", rand.Int())
+	c := NewClient(zap.NewNop(), tally.NoopScope, WithZkSvr(s.ZkConnectString),
+		WithSessionTimeout(DefaultSessionTimeout))
+	err := c.Connect()
+	s.NoError(err)
+
+	record := &model.ZNRecord{}
+	err = c.SetRecordForPath(path, record)
+	s.NoError(err)
+	err = c.UpdateMapField(path, partition, model.FieldKeyCurrentState, state)
+	s.NoError(err)
+	err = c.UpdateSimpleField(path, key, value)
+	record, err = c.GetRecordFromPath(path)
+	s.NoError(err)
+	s.Equal(state, record.GetMapField(partition, model.FieldKeyCurrentState))
+	val, err := c.GetSimpleFieldValueByKey(path, key)
+	s.NoError(err)
+	s.Equal(value, val)
+	err = c.RemoveMapFieldKey(path, partition)
+	s.NoError(err)
+	record, err = c.GetRecordFromPath(path)
+	s.NoError(err)
+	s.Equal("", record.GetMapField(partition, model.FieldKeyCurrentState))
+	c.Disconnect()
 }
 
 func (s *ZKClientTestSuite) TestWatcher() {

@@ -432,7 +432,7 @@ func (c *Client) UpdateMapField(path string, key string, property string, value 
 	// update the value
 	node.SetMapField(key, property, value)
 
-	// mashall to bytes
+	// marshall to bytes
 	data, err = node.Marshal()
 	if err != nil {
 		return err
@@ -459,7 +459,7 @@ func (c *Client) UpdateSimpleField(path string, key string, value string) error 
 	// update the value
 	node.SetSimpleField(key, value)
 
-	// mashall to bytes
+	// marshall to bytes
 	data, err = node.Marshal()
 	if err != nil {
 		return err
@@ -488,15 +488,6 @@ func (c *Client) GetSimpleFieldValueByKey(path string, key string) (string, erro
 		return "", nil
 	}
 	return v, nil
-}
-
-// GetSimpleFieldBool checks if value in path is "TRUE"
-func (c *Client) GetSimpleFieldBool(path string, key string) (bool, error) {
-	result, err := c.GetSimpleFieldValueByKey(path, key)
-	if err == nil {
-		return strings.ToUpper(result) == "TRUE", nil
-	}
-	return false, err
 }
 
 // DeleteTree removes ZK path and its children
