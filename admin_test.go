@@ -77,6 +77,10 @@ func (s *AdminTestSuite) TestAddCluster() {
 		defer s.Admin.DropCluster(cluster)
 	}
 
+	clusterInfo, err := s.Admin.ListClusterInfo(cluster)
+	s.True(len(clusterInfo) > 0)
+	s.NoError(err)
+
 	// verify the data structure in zookeeper
 	propertyStore := fmt.Sprintf("/%s/PROPERTYSTORE", cluster)
 	s.verifyNodeExist(propertyStore)
@@ -87,6 +91,12 @@ func (s *AdminTestSuite) TestAddCluster() {
 
 	instances := fmt.Sprintf("/%s/INSTANCES", cluster)
 	s.verifyNodeExist(instances)
+
+	instancesInfo, err := s.Admin.ListInstances(cluster)
+	s.True(len(instancesInfo) > 0)
+	s.NoError(err)
+	err = s.Admin.GetInstances(cluster)
+	s.NoError(err)
 
 	configs := fmt.Sprintf("/%s/CONFIGS", cluster)
 	s.verifyNodeExist(configs)
@@ -130,6 +140,26 @@ func (s *AdminTestSuite) TestSetConfig() {
 	if prop[_allowParticipantAutoJoinKey] != "true" {
 		t.Error("allowParticipantAutoJoin config set/get failed")
 	}
+	err = s.Admin.SetConfig(cluster, "CONSTRAINT", property)
+	s.NoError(err)
+	prop, err = s.Admin.GetConfig(cluster, "CONSTRAINT", []string{})
+	s.Equal(0, len(prop))
+	s.NoError(err)
+	err = s.Admin.SetConfig(cluster, "PARTICIPANT", property)
+	s.NoError(err)
+	prop, err = s.Admin.GetConfig(cluster, "PARTICIPANT", []string{})
+	s.Equal(0, len(prop))
+	s.NoError(err)
+	err = s.Admin.SetConfig(cluster, "PARTITION", property)
+	s.NoError(err)
+	prop, err = s.Admin.GetConfig(cluster, "PARTITION", []string{})
+	s.Equal(0, len(prop))
+	s.NoError(err)
+	err = s.Admin.SetConfig(cluster, "RESOURCE", property)
+	s.NoError(err)
+	prop, err = s.Admin.GetConfig(cluster, "RESOURCE", []string{})
+	s.Equal(0, len(prop))
+	s.NoError(err)
 }
 
 func (s *AdminTestSuite) TestAddDropNode() {
@@ -222,6 +252,10 @@ func (s *AdminTestSuite) TestAddDropResource() {
 	if err != nil {
 		t.Error("fail addResource")
 	}
+	// expect failure
+	err = s.Admin.AddResource(cluster, resource, 32, "MasterSlave")
+	s.Error(err)
+
 	if info, err := s.Admin.ListResources(cluster); err != nil || info == "" {
 		t.Error("expect OK")
 	}
