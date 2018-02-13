@@ -448,6 +448,13 @@ func (s *ParticipantTestSuite) TestHandleNewSessionCalledAfterZookeeperSessionEx
 	s.Equal(historyForChildrenW[1].Params[0].(string), liveInstancePath)
 }
 
+func (s *ParticipantTestSuite) TestFatalErrorCh() {
+	port := GetRandomPort()
+	p, errCh := NewTestParticipant(zap.NewNop(), tally.NoopScope,
+		s.ZkConnectString, testApplication, TestClusterName, TestResource, testParticipantHost, port)
+	s.True(errCh == p.GetFatalErrorChan())
+}
+
 func (s *ParticipantTestSuite) createMsg(p *participant, ops ...msgOp) *model.Message {
 	msg := s.createValidMsg(p)
 	for _, op := range ops {
