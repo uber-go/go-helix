@@ -22,7 +22,9 @@ package model
 
 import (
 	"math/rand"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -62,18 +64,40 @@ func TestMsg(t *testing.T) {
 	assert.Equal(t, _defaultStateModelFactoryName, msg.GetStateModelFactoryName())
 	record, err := NewRecordFromBytes([]byte(_testMsgJSONString))
 	assert.NoError(t, err)
-	msg = &Message{ZNRecord: *record}
-	assert.Equal(t, "93406067297878252", msg.GetTargetSessionID())
-	partition, err := msg.GetPartitionName()
-	assert.Equal(t, "myDB_5", partition)
-	assert.Equal(t, "OFFLINE", msg.GetFromState())
-	assert.Equal(t, "SLAVE", msg.GetToState())
-	record.SetSimpleField(FieldKeyPartitionName, "")
+	msg.SetStateModelDef("OnlineOffline")
+	assert.Equal(t, "OnlineOffline", msg.GetStateModelDef())
+	msg.SetMsgState(MessageStateRead)
+	assert.Equal(t, MessageStateRead, msg.GetMsgState())
+	msg.SetMsgState(MessageStateUnprocessable)
+	assert.Equal(t, MessageStateUnprocessable, msg.GetMsgState())
+	msg.SetSimpleField(FieldKeyMsgState, "")
+	assert.Equal(t, MessageStateUnprocessable, msg.GetMsgState())
 
 	msg = &Message{ZNRecord: *record}
+	assert.Equal(t, "93406067297878252", msg.GetTargetSessionID())
+	msg.SetPartitionName("myDB_6")
+	partition, err := msg.GetPartitionName()
+	assert.NoError(t, err)
+	assert.Equal(t, "myDB_6", partition)
+	assert.Equal(t, "OFFLINE", msg.GetFromState())
+	assert.Equal(t, "SLAVE", msg.GetToState())
+	assert.Equal(t, "localhost_12913", msg.GetTargetName())
+	assert.Equal(t, "STATE_TRANSITION", msg.GetMsgType())
+	assert.Equal(t, "myDB", msg.GetResourceName())
+	assert.Equal(t, int64(1425268051457), msg.GetCreateTimestamp())
+
+	record.SetSimpleField(FieldKeyPartitionName, "")
+	msg = &Message{ZNRecord: *record}
 	partition, err = msg.GetPartitionName()
-	assert.Equal(t, "", partition)
 	assert.Error(t, err)
+
+	now := time.Now()
+	msg.SetExecuteStartTime(now)
+	executeStartTime, ok := msg.GetSimpleField(FieldKeyExecuteStartTimestamp)
+	assert.True(t, ok)
+	parsed, err := strconv.Atoi(executeStartTime)
+	assert.NoError(t, err)
+	assert.Equal(t, now.UnixNano()/int64(time.Millisecond), int64(parsed)) // check rounding
 }
 
 func TestInstanceConfig(t *testing.T) {
