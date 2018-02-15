@@ -50,6 +50,8 @@ func TestParticipantTestSuite(t *testing.T) {
 
 func (s *ParticipantTestSuite) TestConnectAndDisconnect() {
 	p1, _ := s.createParticipantAndConnect()
+	err := p1.Connect()
+	s.NoError(err)
 	p1.Disconnect()
 	s.Admin.DropInstance(TestClusterName, p1.instanceName)
 	s.False(p1.IsConnected())
@@ -57,6 +59,8 @@ func (s *ParticipantTestSuite) TestConnectAndDisconnect() {
 	p1.Disconnect()
 
 	p2, _ := s.createParticipantAndConnect()
+	err = p2.createLiveInstance()
+	s.Error(err, zk.ErrNodeExists)
 	p2.Disconnect()
 	s.Admin.DropInstance(TestClusterName, p2.instanceName)
 }
@@ -132,9 +136,7 @@ func (s *ParticipantTestSuite) TestGetCurrentResourceNames() {
 	s.Equal(0, resources.Size())
 
 	keyBuilder := &KeyBuilder{TestClusterName}
-	client := s.CreateAndConnectClient()
-	defer client.Disconnect()
-	accessor := newDataAccessor(client, keyBuilder)
+	accessor := p.DataAccessor()
 
 	resource := CreateRandomString()
 	msg := model.NewMsg("test_id")
@@ -329,12 +331,36 @@ func (s *ParticipantTestSuite) TestProcessMessages() {
 	)
 	accessor.createMsg(keyBuilder.participantMsg(pImpl.InstanceName(), CreateRandomString()), msg)
 	// wait for the participant to process messages
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 	mu.Lock()
 	s.Equal(1, counters[StateModelStateOffline][StateModelStateOnline])
 	s.Equal(0, counters[StateModelStateOffline][StateModelStateDropped])
 	s.Equal(0, counters[StateModelStateOnline][StateModelStateOffline])
 	mu.Unlock()
+
+	msgID := CreateRandomString()
+	msg = s.createMsg(pImpl,
+		setMsgFieldsOp(model.FieldKeyTargetSessionID, CreateRandomString()),
+	)
+	msg.ID = msgID
+	accessor.createMsg(keyBuilder.participantMsg(pImpl.InstanceName(), msgID), msg)
+	time.Sleep(2 * time.Second)
+	path := keyBuilder.participantMsg(pImpl.InstanceName(), msgID)
+	exists, _, err := client.Exists(path)
+	s.NoError(err)
+	s.False(exists)
+
+	msgID = CreateRandomString()
+	msg = s.createMsg(pImpl,
+		setMsgFieldsOp(model.FieldKeyMsgType, MsgTypeNoop),
+	)
+	msg.ID = msgID
+	accessor.createMsg(keyBuilder.participantMsg(pImpl.InstanceName(), msgID), msg)
+	time.Sleep(2 * time.Second)
+	path = keyBuilder.participantMsg(pImpl.InstanceName(), msgID)
+	exists, _, err = client.Exists(path)
+	s.NoError(err)
+	s.False(exists)
 }
 
 func (s *ParticipantTestSuite) TestUpdateCurrentState() {
