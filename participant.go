@@ -594,7 +594,7 @@ func (p *participant) processMessages(messages []*model.Message) {
 	currentResourceNames := util.NewStringSet(p.getCurrentResourceNames()...)
 	for _, msg := range messages {
 		msgPath := p.keyBuilder.participantMsg(p.instanceName, msg.ID)
-		if msg.GetMsgType() == "NO_OP" {
+		if msg.GetMsgType() == MsgTypeNoop {
 			p.logger.Info("dropping NO-OP message", zap.Any("helixMsg", msg))
 			err := p.zkClient.DeleteTree(msgPath)
 			if err != nil {

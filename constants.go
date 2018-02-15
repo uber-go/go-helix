@@ -31,4 +31,5 @@ const (
 	TargetController = "CONTROLLER"
 
 	MsgTypeStateTransition = "STATE_TRANSITION"
+	MsgTypeNoop            = "NO_OP"
 )
