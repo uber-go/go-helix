@@ -305,6 +305,73 @@ func (s *AdminTestSuite) TestEnableDisableResource() {
 	}
 }
 
+func (s *AdminTestSuite) TestListExternalView(){
+	t := s.T()
+
+	now := time.Now().Local()
+	cluster := "AdminTest_TestListExternalView_" + now.Format("20060102150405")
+	resource := "resource"
+
+	// expect error if cluster not setup
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrClusterNotSetup {
+		t.Error("must setup cluster before ListExternalView")
+	}
+
+	s.Admin.AddCluster(cluster, false)
+	defer s.Admin.DropCluster(cluster)
+
+	// fail when resource doesn't exist
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource before ListExternalView")
+	}
+	// expect pass
+	if err := s.Admin.AddResource(cluster, "resource", 32, "MasterSlave"); err != nil {
+		t.Error("fail addResource")
+	}
+	// should fail, doesn't create externalView by default
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource externalView before ListExternalView")
+	}
+
+	// create externalview
+	externalView := fmt.Sprintf("/%s/EXTERNALVIEW/%s", cluster, resource)
+	data := "{}" // empty json data
+	s.Admin.zkClient.CreateDataWithPath(externalView, []byte(data))
+
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != nil {
+		t.Error("expect OK")
+	}
+}
+
+func (s *AdminTestSuite) TestListIdealState(){
+	t := s.T()
+
+	now := time.Now().Local()
+	cluster := "AdminTest_TestListIdealState_" + now.Format("20060102150405")
+	resource := "resource"
+
+	// expect error if cluster not setup
+	if _, err := s.Admin.ListIdealState(cluster, resource); err != ErrClusterNotSetup {
+		t.Error("must setup cluster before ListIdealState")
+	}
+
+	s.Admin.AddCluster(cluster, false)
+	defer s.Admin.DropCluster(cluster)
+
+	// fail when resource doesn't exist
+	if _, err := s.Admin.ListIdealState(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource before ListIdealState")
+	}
+	// expect pass
+	if err := s.Admin.AddResource(cluster, "resource", 32, "MasterSlave"); err != nil {
+		t.Error("fail addResource")
+	}
+
+	if _, err := s.Admin.ListIdealState(cluster, resource); err != nil {
+		t.Error("expect OK")
+	}
+}
+
 func (s *AdminTestSuite) verifyNodeExist(path string) {
 	if exists, _, err := s.Admin.zkClient.Exists(path); err != nil || !exists {
 		s.T().Error("failed verifyNodeExist")

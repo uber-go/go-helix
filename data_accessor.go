@@ -76,6 +76,16 @@ func (a *DataAccessor) IdealState(resourceName string) (*model.IdealState, error
 	return &model.IdealState{ZNRecord: *record}, nil
 }
 
+// ExternalView helps get Helix property with type ExternalView
+func (a *DataAccessor) ExternalView(resourceName string) (*model.ExternalView, error) {
+	path := a.keyBuilder.externalViewForResource(resourceName)
+	record, err := a.zkClient.GetRecordFromPath(path)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ExternalView{ZNRecord: *record}, nil
+}
+
 // CurrentState helps get Helix property with type CurrentState
 func (a *DataAccessor) CurrentState(instanceName, session, resourceName string,
 ) (*model.CurrentState, error) {

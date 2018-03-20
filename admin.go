@@ -785,27 +785,43 @@ func (adm Admin) ListInstances(cluster string) (string, error) {
 
 // ListInstanceInfo shows detailed information of an inspace in the helix cluster
 func (adm Admin) ListInstanceInfo(cluster string, instance string) (string, error) {
-	// make sure the cluster is already setup
-	if ok, err := adm.isClusterSetup(cluster); !ok || err != nil {
-		return "", ErrClusterNotSetup
-	}
-
 	builder := &KeyBuilder{cluster}
 	instanceCfg := builder.participantConfig(instance)
 
-	if exists, _, err := adm.zkClient.Exists(instanceCfg); !exists || err != nil {
-		if !exists {
-			return "", ErrNodeNotExist
-		}
+	accessor, err := adm.createDataAccessorForPath(cluster, instanceCfg, builder)
+	if err != nil {
 		return "", err
 	}
 
-	accessor := newDataAccessor(adm.zkClient, builder)
 	r, err := accessor.Msg(instanceCfg)
 	if err != nil {
 		return "", err
 	}
 	return r.String(), nil
+}
+
+func (adm Admin) ListIdealState(cluster string, resource string) (*model.IdealState, error) {
+	builder := &KeyBuilder{cluster}
+	path := builder.idealStateForResource(resource)
+
+	accessor, err := adm.createDataAccessorForPath(cluster, path, builder)
+	if err != nil {
+		return nil, err
+	}
+
+	return accessor.IdealState(resource)
+}
+
+func (adm Admin) ListExternalView(cluster string, resource string) (*model.ExternalView, error) {
+	builder := &KeyBuilder{cluster}
+	path := builder.externalViewForResource(resource)
+
+	accessor, err := adm.createDataAccessorForPath(cluster, path, builder)
+	if err != nil {
+		return nil, err
+	}
+
+	return accessor.ExternalView(resource)
 }
 
 // GetInstances prints out lists of instances
@@ -852,4 +868,24 @@ func (adm Admin) isClusterSetup(cluster string) (bool, error) {
 		keyBuilder.externalView(),
 		keyBuilder.stateModelDefs(),
 	)
+}
+
+// createDataAccessorForPath checks that the cluster and path is valid to create a DataAcessor
+func (adm Admin) createDataAccessorForPath(
+	cluster string,
+	path string,
+	builder *KeyBuilder) (*DataAccessor, error) {
+	// make sure the cluster is already setup
+	if ok, err := adm.isClusterSetup(cluster); !ok || err != nil {
+		return nil, ErrClusterNotSetup
+	}
+
+	if exists, _, err := adm.zkClient.Exists(path); !exists || err != nil {
+		if !exists {
+			return nil, ErrNodeNotExist
+		}
+		return nil, err
+	}
+
+	return newDataAccessor(adm.zkClient, builder), nil
 }
