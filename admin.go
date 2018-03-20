@@ -800,6 +800,7 @@ func (adm Admin) ListInstanceInfo(cluster string, instance string) (string, erro
 	return r.String(), nil
 }
 
+// ListIdealState shows a list of ideal states for the cluster resource
 func (adm Admin) ListIdealState(cluster string, resource string) (*model.IdealState, error) {
 	builder := &KeyBuilder{cluster}
 	path := builder.idealStateForResource(resource)
@@ -812,6 +813,7 @@ func (adm Admin) ListIdealState(cluster string, resource string) (*model.IdealSt
 	return accessor.IdealState(resource)
 }
 
+// ListExternalView shows the externalviews for the cluster resource
 func (adm Admin) ListExternalView(cluster string, resource string) (*model.ExternalView, error) {
 	builder := &KeyBuilder{cluster}
 	path := builder.externalViewForResource(resource)
