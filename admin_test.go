@@ -305,7 +305,7 @@ func (s *AdminTestSuite) TestEnableDisableResource() {
 	}
 }
 
-func (s *AdminTestSuite) TestListExternalView(){
+func (s *AdminTestSuite) TestListExternalView() {
 	t := s.T()
 
 	now := time.Now().Local()
@@ -343,7 +343,7 @@ func (s *AdminTestSuite) TestListExternalView(){
 	}
 }
 
-func (s *AdminTestSuite) TestListIdealState(){
+func (s *AdminTestSuite) TestListIdealState() {
 	t := s.T()
 
 	now := time.Now().Local()
