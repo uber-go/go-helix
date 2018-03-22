@@ -21,11 +21,11 @@
 package helix
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-	"encoding/json"
 
 	"github.com/stretchr/testify/suite"
 	"github.com/uber-go/go-helix/model"
