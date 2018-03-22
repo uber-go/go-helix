@@ -25,8 +25,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"encoding/json"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uber-go/go-helix/model"
 )
 
 type AdminTestSuite struct {
@@ -335,11 +337,20 @@ func (s *AdminTestSuite) TestListExternalView() {
 
 	// create externalview
 	externalView := fmt.Sprintf("/%s/EXTERNALVIEW/%s", cluster, resource)
-	data := "{}" // empty json data
-	s.Admin.zkClient.CreateDataWithPath(externalView, []byte(data))
-
-	if _, err := s.Admin.ListExternalView(cluster, resource); err != nil {
+	m := model.NewRecord("resource")
+	m.SetIntField("NUM_PARTITIONS", 32)
+	data, err := json.Marshal(m)
+	if err != nil {
 		t.Error("expect OK")
+	}
+	s.Admin.zkClient.CreateDataWithPath(externalView, data)
+
+	res, err := s.Admin.ListExternalView(cluster, resource)
+	if err != nil {
+		t.Error("expect OK")
+	}
+	if res.ZNRecord.ID != "resource" || res.GetNumPartitions() != 32 {
+		t.Error("expect read model OK")
 	}
 }
 
@@ -367,8 +378,12 @@ func (s *AdminTestSuite) TestListIdealState() {
 		t.Error("fail addResource")
 	}
 
-	if _, err := s.Admin.ListIdealState(cluster, resource); err != nil {
+	res, err := s.Admin.ListIdealState(cluster, resource)
+	if err != nil {
 		t.Error("expect OK")
+	}
+	if res.ZNRecord.ID != "resource" || res.GetNumPartitions() != 32 {
+		t.Error("expect read model OK")
 	}
 }
 
