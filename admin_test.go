@@ -21,12 +21,14 @@
 package helix
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/uber-go/go-helix/model"
 )
 
 type AdminTestSuite struct {
@@ -302,6 +304,86 @@ func (s *AdminTestSuite) TestEnableDisableResource() {
 	if err := s.Admin.EnableResource(cluster, resource); err != nil {
 		// expect error if resource not exist
 		t.Error("expect OK")
+	}
+}
+
+func (s *AdminTestSuite) TestListExternalView() {
+	t := s.T()
+
+	now := time.Now().Local()
+	cluster := "AdminTest_TestListExternalView_" + now.Format("20060102150405")
+	resource := "resource"
+
+	// expect error if cluster not setup
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrClusterNotSetup {
+		t.Error("must setup cluster before ListExternalView")
+	}
+
+	s.Admin.AddCluster(cluster, false)
+	defer s.Admin.DropCluster(cluster)
+
+	// fail when resource doesn't exist
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource before ListExternalView")
+	}
+	// expect pass
+	if err := s.Admin.AddResource(cluster, "resource", 32, "MasterSlave"); err != nil {
+		t.Error("fail addResource")
+	}
+	// should fail, doesn't create externalView by default
+	if _, err := s.Admin.ListExternalView(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource externalView before ListExternalView")
+	}
+
+	// create externalview
+	externalView := fmt.Sprintf("/%s/EXTERNALVIEW/%s", cluster, resource)
+	m := model.NewRecord("resource")
+	m.SetIntField("NUM_PARTITIONS", 32)
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Error("expect OK")
+	}
+	s.Admin.zkClient.CreateDataWithPath(externalView, data)
+
+	res, err := s.Admin.ListExternalView(cluster, resource)
+	if err != nil {
+		t.Error("expect OK")
+	}
+	if res.ZNRecord.ID != "resource" || res.GetNumPartitions() != 32 {
+		t.Error("expect read model OK")
+	}
+}
+
+func (s *AdminTestSuite) TestListIdealState() {
+	t := s.T()
+
+	now := time.Now().Local()
+	cluster := "AdminTest_TestListIdealState_" + now.Format("20060102150405")
+	resource := "resource"
+
+	// expect error if cluster not setup
+	if _, err := s.Admin.ListIdealState(cluster, resource); err != ErrClusterNotSetup {
+		t.Error("must setup cluster before ListIdealState")
+	}
+
+	s.Admin.AddCluster(cluster, false)
+	defer s.Admin.DropCluster(cluster)
+
+	// fail when resource doesn't exist
+	if _, err := s.Admin.ListIdealState(cluster, resource); err != ErrNodeNotExist {
+		t.Error("must setup resource before ListIdealState")
+	}
+	// expect pass
+	if err := s.Admin.AddResource(cluster, "resource", 32, "MasterSlave"); err != nil {
+		t.Error("fail addResource")
+	}
+
+	res, err := s.Admin.ListIdealState(cluster, resource)
+	if err != nil {
+		t.Error("expect OK")
+	}
+	if res.ZNRecord.ID != "resource" || res.GetNumPartitions() != 32 {
+		t.Error("expect read model OK")
 	}
 }
 

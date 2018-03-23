@@ -150,3 +150,12 @@ func TestIdealState(t *testing.T) {
 	state := &IdealState{ZNRecord: *record}
 	assert.Equal(t, numPartitions, state.GetNumPartitions())
 }
+
+func TestExternalView(t *testing.T) {
+	numPartitions := 10
+	record, err := NewRecordFromBytes([]byte("{}"))
+	assert.NoError(t, err)
+	record.SetIntField(FieldKeyNumPartitions, numPartitions)
+	state := &ExternalView{ZNRecord: *record}
+	assert.Equal(t, numPartitions, state.GetNumPartitions())
+}

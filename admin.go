@@ -808,6 +808,52 @@ func (adm Admin) ListInstanceInfo(cluster string, instance string) (string, erro
 	return r.String(), nil
 }
 
+// ListIdealState shows a list of ideal states for the cluster resource
+func (adm Admin) ListIdealState(cluster string, resource string) (*model.IdealState, error) {
+	// make sure the cluster is already setup
+	if ok, err := adm.isClusterSetup(cluster); !ok || err != nil {
+		return nil, ErrClusterNotSetup
+	}
+
+	builder := &KeyBuilder{cluster}
+	path := builder.idealStateForResource(resource)
+
+	// check path exists
+	if exists, _, err := adm.zkClient.Exists(path); !exists || err != nil {
+		if !exists {
+			return nil, ErrNodeNotExist
+		}
+		return nil, err
+	}
+
+	accessor := newDataAccessor(adm.zkClient, builder)
+
+	return accessor.IdealState(resource)
+}
+
+// ListExternalView shows the externalviews for the cluster resource
+func (adm Admin) ListExternalView(cluster string, resource string) (*model.ExternalView, error) {
+	// make sure the cluster is already setup
+	if ok, err := adm.isClusterSetup(cluster); !ok || err != nil {
+		return nil, ErrClusterNotSetup
+	}
+
+	builder := &KeyBuilder{cluster}
+	path := builder.externalViewForResource(resource)
+
+	// check path exists
+	if exists, _, err := adm.zkClient.Exists(path); !exists || err != nil {
+		if !exists {
+			return nil, ErrNodeNotExist
+		}
+		return nil, err
+	}
+
+	accessor := newDataAccessor(adm.zkClient, builder)
+
+	return accessor.ExternalView(resource)
+}
+
 // GetInstances prints out lists of instances
 func (adm Admin) GetInstances(cluster string) error {
 	kb := KeyBuilder{cluster}
